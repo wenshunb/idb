@@ -141,12 +141,13 @@ targets:
         # Wrap the reverse-engineered headers under PrivateHeaders/<Name>/ as Clang
         # modules so Swift can `import CoreSimulator`, `import SimulatorKit`, etc.
         # Mirrors `make_private_header_frameworks()` in fbobjc/Tools/idb/defs.bzl.
-        OTHER_SWIFT_FLAGS: $(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/CoreSimulator/module.modulemap -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/SimulatorApp/module.modulemap -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/SimulatorKit/module.modulemap -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/AXRuntime/module.modulemap
+        OTHER_CFLAGS: $(inherited) -fmodule-map-file=$(SRCROOT)/PrivateHeaders/AccessibilityPlatformTranslation/module.modulemap
+        OTHER_SWIFT_FLAGS: $(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/CoreSimulator/module.modulemap -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/SimulatorApp/module.modulemap -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/SimulatorKit/module.modulemap -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/AXRuntime/module.modulemap -Xcc -fmodule-map-file=$(SRCROOT)/PrivateHeaders/AccessibilityPlatformTranslation/module.modulemap
         # CoreSimulator is loaded at runtime by FBSimulatorControlFrameworkLoader.
         # Swift generates direct class references that must be satisfied at link
         # time, so weak-link against the TBD stub. SimulatorKit is header-only —
         # no symbols are referenced from compiled code (mirrors the Buck setup).
-        OTHER_LDFLAGS: $(inherited) -weak_library $(SRCROOT)/PrivateHeaders/CoreSimulator/CoreSimulator.tbd
+        OTHER_LDFLAGS: $(inherited) -weak_library $(SRCROOT)/PrivateHeaders/CoreSimulator/CoreSimulator.tbd -weak_library $(SRCROOT)/PrivateHeaders/AccessibilityPlatformTranslation/AccessibilityPlatformTranslation.tbd
     dependencies:
       - target: FBControlCore
         embed: true
@@ -162,6 +163,7 @@ targets:
       - sdk: Foundation.framework
       - sdk: IOSurface.framework
       - sdk: Metal.framework
+      - sdk: UniformTypeIdentifiers.framework
       - sdk: VideoToolbox.framework
 
   FBSimulatorControlTests:

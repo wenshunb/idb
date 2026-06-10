@@ -14,6 +14,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import <IOSurface/IOSurface.h>
 #import <Metal/Metal.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <VideoToolbox/VideoToolbox.h>
 
 #import <FBControlCore/FBControlCore.h>
@@ -25,6 +26,19 @@
 @end
 
 typedef BOOL (*FBCompressedFrameWriter)(CMSampleBufferRef sampleBuffer, id _Nullable context, id<FBDataConsumer> consumer, id<FBControlCoreLogger> logger, NSError **error);
+
+static NSString *FBStringFromOSType(OSType type)
+{
+  char value[5] = {
+    (char) ((type >> 24) & 0xff),
+    (char) ((type >> 16) & 0xff),
+    (char) ((type >> 8) & 0xff),
+    (char) (type & 0xff),
+    '\0',
+  };
+  NSString *string = [[NSString alloc] initWithBytes:value length:4 encoding:NSASCIIStringEncoding];
+  return string ?: [NSString stringWithFormat:@"0x%08x", (unsigned int) type];
+}
 
 @interface FBVideoCompressorCallbackSourceFrame : NSObject
 
@@ -135,7 +149,7 @@ static NSDictionary<NSString *, id> *FBBitmapStreamPixelBufferAttributesFromPixe
   size_t frameSize = CVPixelBufferGetDataSize(pixelBuffer);
   size_t rowSize = CVPixelBufferGetBytesPerRow(pixelBuffer);
   OSType pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer);
-  NSString *pixelFormatString = (__bridge_transfer NSString *) UTCreateStringForOSType(pixelFormat);
+  NSString *pixelFormatString = FBStringFromOSType(pixelFormat);
 
   size_t columnLeft;
   size_t columnRight;
@@ -1260,7 +1274,7 @@ static void MinicapCompressorCallback(void *outputCallbackRefCon, void *sourceFr
   }
 
   NSMutableData *pngData = [NSMutableData data];
-  CGImageDestinationRef dest = CGImageDestinationCreateWithData((CFMutableDataRef)pngData, kUTTypePNG, 1, NULL);
+  CGImageDestinationRef dest = CGImageDestinationCreateWithData((CFMutableDataRef)pngData, (__bridge CFStringRef) UTTypePNG.identifier, 1, NULL);
   CGImageDestinationAddImage(dest, cgImage, NULL);
   BOOL finalized = CGImageDestinationFinalize(dest);
   CFRelease(dest);
