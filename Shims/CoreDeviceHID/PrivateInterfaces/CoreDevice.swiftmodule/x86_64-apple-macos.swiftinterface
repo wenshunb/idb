@@ -1,0 +1,227 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.4
+// swift-module-flags: -target x86_64-apple-macosx27.0 -enable-library-evolution -module-name CoreDevice
+import CoreGraphics
+import Dispatch
+import Foundation
+import Swift
+import UniversalHID
+
+public struct Capability {
+}
+
+public struct CoreDeviceError: Swift.Error, Swift.CustomStringConvertible {
+  public var description: Swift.String { get }
+}
+
+public struct CapabilityStaticMember<A> {
+  public init()
+}
+
+public protocol DeviceCapabilityProtocol {
+  static var capability: CoreDevice.Capability { get }
+  static var identifier: Swift.String { get }
+  static var identifierSuffix: Swift.String { get }
+  static var priority: Swift.Int { get }
+}
+
+public protocol DeviceCapability: CoreDevice.DeviceCapabilityProtocol {
+  associatedtype ProtocolType
+  associatedtype ImplType
+}
+
+public protocol DeviceCapabilityImplementation: CoreDevice.DeviceCapabilityProtocol {
+  static func makeImplementation(for remoteDevice: CoreDevice.RemoteDevice) async throws -> any CoreDevice.DeviceCapabilityImplementation
+}
+
+public enum DeviceIdentifier: Swift.Hashable, Swift.CustomStringConvertible {
+  case uuid(Foundation.UUID, Swift.String)
+  case ecid(Swift.UInt64)
+  public var uuidRepresentation: Foundation.UUID { get }
+  public var description: Swift.String { get }
+  public var debugDescription: Swift.String { get }
+}
+
+public struct CoreDeviceService {
+  public static var sharedConnection: any CoreDevice.CoreDeviceServiceConnection { get }
+  public static func deviceIdentifier(forDeviceIdentifiedBy deviceIdentifier: Foundation.UUID) throws -> CoreDevice.DeviceIdentifier
+  public static func remoteDevice(for deviceIdentifier: CoreDevice.DeviceIdentifier) throws -> CoreDevice.RemoteDevice
+}
+
+public protocol CoreDeviceServiceConnection {
+}
+
+public enum DeviceVisibilityClass: Swift.Hashable, Swift.CaseIterable, Swift.RawRepresentable {
+  case `default`
+  case wirelessPairableDevices
+  case devicesBeingProvisioned
+  case simulators
+  public init?(rawValue: Swift.String)
+  public var rawValue: Swift.String { get }
+  public static var allCases: [CoreDevice.DeviceVisibilityClass] { get }
+}
+
+public class DeviceManager {
+  public init(serviceConnection: any CoreDevice.CoreDeviceServiceConnection, allowedDeviceVisibilityClasses: Swift.Set<CoreDevice.DeviceVisibilityClass>)
+  public static var shared: CoreDevice.DeviceManager { get }
+  public func awaitFullInitialization() async
+  final public func allDevices() -> [CoreDevice.RemoteDevice]
+}
+
+public class RemoteDevice {
+  public var deviceIdentifier: Foundation.UUID { get }
+  public func supportsFeature(identifiedBy identifier: Swift.String) -> Swift.Bool
+  public func getImplementation<A>(for capability: CoreDevice.CapabilityStaticMember<A>) async throws -> A.ProtocolType where A: CoreDevice.DeviceCapability
+  public func implementation<A>(for capability: CoreDevice.CapabilityStaticMember<A>) async throws -> A.ImplType where A: CoreDevice.DeviceCapability
+}
+
+public struct HIDDeviceCapability: CoreDevice.DeviceCapability {
+  public typealias ProtocolType = any CoreDevice.DeviceCapabilityProtocol
+  public typealias ImplType = any CoreDevice.DeviceCapabilityImplementation
+}
+
+extension CoreDevice.CapabilityStaticMember where A == CoreDevice.HIDDeviceCapability {
+  public static var pointer: CoreDevice.CapabilityStaticMember<CoreDevice.PointerHIDCapability> { get }
+  public static var keyboard: CoreDevice.CapabilityStaticMember<CoreDevice.KeyboardHIDCapability> { get }
+  public static var digitizer: CoreDevice.CapabilityStaticMember<CoreDevice.DigitizerHIDCapability> { get }
+}
+
+extension CoreDevice.CapabilityStaticMember where A: CoreDevice.DeviceCapability {
+  public static var universalHidService: CoreDevice.CapabilityStaticMember<CoreDevice.UniversalHIDServiceCapability> { get }
+}
+
+public struct PointerHIDCapability: CoreDevice.DeviceCapability {
+  public typealias ProtocolType = any CoreDevice.HIDPointer
+  public typealias ImplType = any CoreDevice.HIDPointer
+}
+
+public struct KeyboardHIDCapability: CoreDevice.DeviceCapability {
+  public typealias ProtocolType = any CoreDevice.HIDKeyboard
+  public typealias ImplType = any CoreDevice.HIDKeyboard
+}
+
+public struct DigitizerHIDCapability: CoreDevice.DeviceCapability {
+  public typealias ProtocolType = any CoreDevice.HIDDigitizer
+  public typealias ImplType = any CoreDevice.HIDDigitizer
+}
+
+public struct UniversalHIDServiceCapability: CoreDevice.DeviceCapability {
+  public typealias ProtocolType = any CoreDevice.UniversalHIDService
+  public typealias ImplType = any CoreDevice.UniversalHIDService
+}
+
+@frozen public struct HIDServiceID: Swift.Hashable, Swift.CustomStringConvertible {
+  @_hasStorage public var rawValue: Swift.UInt64 {
+    get
+    set
+  }
+  public init(rawValue: Swift.UInt64)
+  public var description: Swift.String { get }
+}
+
+public struct HIDServiceDescriptor {
+}
+
+public enum HIDPointerButtonPhase {
+  case none
+  case up
+  case down
+  case dragged
+}
+
+public protocol HIDPointer: CoreDevice.DeviceCapabilityProtocol {
+  func sendBarrier()
+  func send(movedTo point: CoreGraphics.CGPoint) async throws
+  func send(button: Swift.Int, phase: CoreDevice.HIDPointerButtonPhase, clicks: Swift.Int, at point: CoreGraphics.CGPoint) async throws
+}
+
+public struct HIDKeyboardUsageCode: Swift.RawRepresentable, Swift.ExpressibleByIntegerLiteral, Swift.CustomStringConvertible {
+  public var rawValue: Swift.UInt16 {
+    get
+  }
+  public init(rawValue: Swift.UInt16)
+  public init(_ rawValue: Swift.Int)
+  public init(integerLiteral: Swift.UInt16)
+  public var description: Swift.String { get }
+}
+
+public protocol HIDUsageCodeProtocol {
+  var usagePage: Swift.UInt16 { get }
+  var usageCode: Swift.UInt16 { get }
+}
+
+public enum HIDButtonState {
+  case down
+  case up
+}
+
+public protocol HIDKeyboard: CoreDevice.DeviceCapabilityProtocol {
+  func sendBarrier()
+  func send(key: CoreDevice.HIDKeyboardUsageCode, state: CoreDevice.HIDButtonState) throws
+}
+
+public struct DigitizerPoint {
+}
+
+public enum DigitizerEventType {
+  case start
+  case position
+  case end
+}
+
+public enum DigitizerEdge {
+  case none
+  case top
+  case left
+  case bottom
+  case right
+}
+
+public enum DigitizerTarget {
+  case mainScreen
+  case display1
+  case display2
+  case display3
+  case display4
+  case display5
+  case display6
+  case display7
+  case display8
+  case display9
+  case display10
+}
+
+public protocol HIDDigitizer: CoreDevice.DeviceCapabilityProtocol {
+  func sendBarrier()
+  func send(pointOne: CoreDevice.DigitizerPoint, pointTwo: CoreDevice.DigitizerPoint?, eventType: CoreDevice.DigitizerEventType, edge: CoreDevice.DigitizerEdge, target: CoreDevice.DigitizerTarget) throws
+}
+
+extension CoreDevice.HIDDigitizer {
+  public func send(pointOne: CoreGraphics.CGPoint, pointTwo: CoreGraphics.CGPoint?, eventType: CoreDevice.DigitizerEventType, edge: CoreDevice.DigitizerEdge, target: CoreDevice.DigitizerTarget) throws
+}
+
+public protocol UniversalHIDService: CoreDevice.DeviceCapabilityProtocol {
+  func sendBarrier()
+  func connectedServiceDescriptors() async throws(CoreDevice.CoreDeviceError) -> [CoreDevice.HIDServiceDescriptor]
+  func createService(descriptor: CoreDevice.HIDServiceDescriptor) async throws(CoreDevice.CoreDeviceError) -> CoreDevice.HIDServiceID
+  func remove(service: CoreDevice.HIDServiceID) async throws(CoreDevice.CoreDeviceError)
+  func resetGestureState(service: CoreDevice.HIDServiceID) throws(CoreDevice.CoreDeviceError)
+  func send(report: UniversalHID.HIDReport, to: CoreDevice.HIDServiceID) throws(CoreDevice.CoreDeviceError)
+  func connectedServices() async throws(CoreDevice.CoreDeviceError) -> [UniversalHID.HIDServiceProperties]
+  func createService(properties: UniversalHID.HIDServiceProperties) async throws(CoreDevice.CoreDeviceError) -> Swift.UInt64
+  func removeService(serviceID: Swift.UInt64) async throws(CoreDevice.CoreDeviceError)
+  func resetGestureState(service: Swift.UInt64) throws(CoreDevice.CoreDeviceError)
+  func send(report: UniversalHID.HIDReport, to: Swift.UInt64) throws(CoreDevice.CoreDeviceError)
+}
+
+extension CoreDevice.UniversalHIDService {
+  public func createService(usages: [UniversalHID.HIDUsage]) async throws(CoreDevice.CoreDeviceError) -> Swift.UInt64
+  public func connectedServiceIDs() async throws(CoreDevice.CoreDeviceError) -> [CoreDevice.HIDServiceID]
+  public func serviceExists(_ service: CoreDevice.HIDServiceID) async throws(CoreDevice.CoreDeviceError) -> Swift.Bool
+  public func resetGestureState(serviceID: CoreDevice.HIDServiceID) throws(CoreDevice.CoreDeviceError)
+  public func send(report: UniversalHID.HIDReport, to: CoreDevice.HIDServiceID) throws(CoreDevice.CoreDeviceError)
+  public func findServiceMatching(usage: UniversalHID.HIDUsage) async throws(CoreDevice.CoreDeviceError) -> Swift.UInt64?
+  public func primaryKeyboard() async throws(CoreDevice.CoreDeviceError) -> Swift.UInt64?
+  public func primaryPointer() async throws(CoreDevice.CoreDeviceError) -> Swift.UInt64?
+  public func primaryTelephonyButtons() async throws(CoreDevice.CoreDeviceError) -> Swift.UInt64?
+}

@@ -54,6 +54,14 @@ private func shouldLogHIDEventDetails() -> Bool {
   ProcessInfo.processInfo.environment["FBSIMULATORCONTROL_LOG_HID_DETAILS"]?.boolValue ?? false
 }
 
+private func hidEventFailure(_ message: String) -> FBFuture<NSNull> {
+  FBSimulatorError.describe(message).failFuture() as! FBFuture<NSNull>
+}
+
+private func unavailableIndigoPayload() -> Data {
+  Data()
+}
+
 private extension String {
   var boolValue: Bool {
     (self as NSString).boolValue
@@ -127,11 +135,14 @@ private class FBSimulatorHIDEvent_Touch: NSObject, FBSimulatorHIDEventPayload {
   }
 
   func sendOn(hid: FBSimulatorHID) -> FBFuture<NSNull> {
-    hid.sendEvent(payload(for: hid))
+    hid.sendTouch(direction: direction, x: x, y: y)
   }
 
   func payload(for hid: FBSimulatorHID) -> Data {
-    hid.indigo.touchScreenSize(hid.mainScreenSize, screenScale: hid.mainScreenScale, direction: direction, x: x, y: y)
+    guard let indigo = hid.indigo else {
+      return unavailableIndigoPayload()
+    }
+    return indigo.touchScreenSize(hid.mainScreenSize, screenScale: hid.mainScreenScale, direction: direction, x: x, y: y)
   }
 
   override var description: String {
@@ -169,11 +180,17 @@ private class FBSimulatorHIDEvent_Button: NSObject, FBSimulatorHIDEventPayload {
   }
 
   func sendOn(hid: FBSimulatorHID) -> FBFuture<NSNull> {
-    hid.sendEvent(payload(for: hid))
+    guard let indigo = hid.indigo else {
+      return hidEventFailure("Indigo button HID is unavailable for this simulator connection; buttons are not supported by the Xcode 27 CoreDevice helper transport")
+    }
+    return hid.sendEvent(indigo.button(with: type, button: button))
   }
 
   func payload(for hid: FBSimulatorHID) -> Data {
-    hid.indigo.button(with: type, button: button)
+    guard let indigo = hid.indigo else {
+      return unavailableIndigoPayload()
+    }
+    return indigo.button(with: type, button: button)
   }
 
   override var description: String {
@@ -228,11 +245,14 @@ private class FBSimulatorHIDEvent_Keyboard: NSObject, FBSimulatorHIDEventPayload
   }
 
   func sendOn(hid: FBSimulatorHID) -> FBFuture<NSNull> {
-    hid.sendEvent(payload(for: hid))
+    hid.sendKeyboard(direction: direction, keyCode: keyCode)
   }
 
   func payload(for hid: FBSimulatorHID) -> Data {
-    hid.indigo.keyboard(with: direction, keyCode: keyCode)
+    guard let indigo = hid.indigo else {
+      return unavailableIndigoPayload()
+    }
+    return indigo.keyboard(with: direction, keyCode: keyCode)
   }
 
   override var description: String {
@@ -272,11 +292,24 @@ private class FBSimulatorHIDEvent_TwoFingerTouch: NSObject, FBSimulatorHIDEventP
   }
 
   func sendOn(hid: FBSimulatorHID) -> FBFuture<NSNull> {
-    hid.sendEvent(payload(for: hid))
+    guard let indigo = hid.indigo else {
+      return hidEventFailure("Indigo multi-touch HID is unavailable for this simulator connection; multi-touch is not supported by the Xcode 27 CoreDevice helper transport")
+    }
+    return hid.sendEvent(
+      indigo.twoFingerTouchScreenSize(
+        hid.mainScreenSize,
+        screenScale: hid.mainScreenScale,
+        direction: direction,
+        finger1: finger1,
+        finger2: finger2)
+    )
   }
 
   func payload(for hid: FBSimulatorHID) -> Data {
-    hid.indigo.twoFingerTouchScreenSize(
+    guard let indigo = hid.indigo else {
+      return unavailableIndigoPayload()
+    }
+    return indigo.twoFingerTouchScreenSize(
       hid.mainScreenSize,
       screenScale: hid.mainScreenScale,
       direction: direction,

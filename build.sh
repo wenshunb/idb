@@ -240,6 +240,8 @@ function regenerate_projects() {
   generate_xcodeproj "." "FBSimulatorControl"
   echo "Generating Shimulator project..."
   generate_xcodeproj "Shims/Shimulator" "Shimulator"
+  echo "Generating CoreDevice HID helper project..."
+  generate_xcodeproj "Shims/CoreDeviceHID" "FBCoreDeviceHIDHelper"
   echo "Generating idb_companion project..."
   generate_xcodeproj "idb_companion" "idb_companion"
 }
@@ -258,6 +260,25 @@ function invoke_xcodebuild() {
     NSUnbufferedIO=YES xcodebuild -skipMacroValidation ENABLE_USER_SCRIPT_SANDBOXING=NO SYMROOT="$symroot" OBJROOT="$objroot" $arguments | xcpretty -c
   else
     xcodebuild -skipMacroValidation ENABLE_USER_SCRIPT_SANDBOXING=NO SYMROOT="$symroot" OBJROOT="$objroot" $arguments
+  fi
+}
+
+function xcode_major_version() {
+  xcodebuild -version | awk '/^Xcode / { split($2, version, "."); print version[1]; exit }'
+}
+
+function should_build_coredevice_hid_helper() {
+  local major_version
+  major_version=$(xcode_major_version)
+  [[ -n "$major_version" && "$major_version" -ge 27 ]]
+}
+
+function product_root_for_project() {
+  local project_dir=$1
+  if [[ "$BUILD_DIRECTORY" = /* ]]; then
+    echo "$BUILD_DIRECTORY/Products"
+  else
+    echo "$(cd "$project_dir" && pwd)/$BUILD_DIRECTORY/Products"
   fi
 }
 
@@ -299,6 +320,10 @@ function build_target() {
     -derivedDataPath $BUILD_DIRECTORY \
     -configuration $configuration \
     build
+
+  if [[ "$name" == "FBSimulatorControl" ]]; then
+    bundle_coredevice_hid_helper "$configuration"
+  fi
 }
 
 function build_all_frameworks() {
@@ -325,6 +350,51 @@ function build_shim() {
 function build_shims() {
   build_shim Shimulator iphonesimulator
   build_shim Maculator macosx
+}
+
+function build_coredevice_hid_helper() {
+  invoke_xcodebuild \
+    ONLY_ACTIVE_ARCH=YES \
+    -project Shims/CoreDeviceHID/FBCoreDeviceHIDHelper.xcodeproj \
+    -scheme idb_coredevice_hid_helper \
+    -sdk macosx \
+    -derivedDataPath $BUILD_DIRECTORY \
+    -configuration Release \
+    build
+}
+
+function bundle_coredevice_hid_helper() {
+  local configuration=$1
+
+  if ! should_build_coredevice_hid_helper; then
+    echo "Skipping CoreDevice HID helper bundling; Xcode < 27"
+    return
+  fi
+
+  build_coredevice_hid_helper
+
+  local helper="$(product_root_for_project "Shims/CoreDeviceHID")/Release/idb_coredevice_hid_helper"
+  if [ ! -x "$helper" ]; then
+    echo "error: CoreDevice HID helper not found or not executable at $helper"
+    exit 1
+  fi
+
+  local framework="$(product_root_for_project ".")/$configuration/FBSimulatorControl.framework"
+  local resources="$framework/Versions/A/Resources"
+  local destination="$resources/idb_coredevice_hid_helper"
+
+  if [ ! -d "$framework" ]; then
+    echo "error: FBSimulatorControl.framework not found at $framework"
+    exit 1
+  fi
+
+  echo "Bundling CoreDevice HID helper into $framework"
+  mkdir -p "$resources"
+  cp -f "$helper" "$destination"
+  chmod 755 "$destination"
+
+  codesign --force --sign - --timestamp=none "$destination"
+  codesign --force --sign - --timestamp=none "$framework/Versions/A"
 }
 
 function build_idb_companion() {
@@ -378,13 +448,15 @@ function build() {
         build_shim Shimulator iphonesimulator;;
       Maculator)
         build_shim Maculator macosx;;
+      CoreDeviceHIDHelper)
+        build_coredevice_hid_helper;;
       idb_companion)
         build_idb_companion;;
       FBControlCore|XCTestBootstrap|FBSimulatorControl|FBDeviceControl)
         build_target $target;;
       *)
         echo "Unknown target: $target"
-        echo "Valid targets: all, frameworks, shims, idb_companion, FBControlCore, XCTestBootstrap, FBSimulatorControl, FBDeviceControl, Shimulator, Maculator"
+        echo "Valid targets: all, frameworks, shims, idb_companion, FBControlCore, XCTestBootstrap, FBSimulatorControl, FBDeviceControl, Shimulator, Maculator, CoreDeviceHIDHelper"
         exit 1;;
     esac
   fi
@@ -467,6 +539,7 @@ Commands:
       FBDeviceControl Build FBDeviceControl framework
       Shimulator      Build Shimulator dylib (iOS simulator)
       Maculator       Build Maculator dylib (macOS)
+      CoreDeviceHIDHelper Build Xcode 27 CoreDevice HID helper (macOS 12+)
 
   test [<target>]
     Run tests. If no target specified, runs all tests.
@@ -486,6 +559,7 @@ Examples:
   ./build.sh build shims              # Build Shimulator and Maculator
   ./build.sh build idb_companion      # Build idb_companion
   ./build.sh build FBControlCore      # Build specific framework
+  ./build.sh build CoreDeviceHIDHelper # Build Xcode 27 HID helper
   ./build.sh test                     # Run all tests
   ./build.sh test FBSimulatorControl  # Test specific framework
 

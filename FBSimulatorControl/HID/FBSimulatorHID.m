@@ -23,10 +23,11 @@
 
 @interface FBSimulatorHID ()
 
-@property (nonatomic, readonly, strong) SimDeviceLegacyClient *client;
+@property (nonatomic, readonly, strong, nullable) SimDeviceLegacyClient *client;
 @property (nonatomic, readonly, weak) FBSimulator *simulator;
 
-- (instancetype)initWithIndigo:(FBSimulatorIndigoHID *)indigo purple:(FBSimulatorPurpleHID *)purple client:(SimDeviceLegacyClient *)client simulator:(FBSimulator *)simulator mainScreenSize:(CGSize)mainScreenSize mainScreenScale:(float)mainScreenScale queue:(dispatch_queue_t)queue;
+- (instancetype)initWithIndigo:(nullable FBSimulatorIndigoHID *)indigo purple:(FBSimulatorPurpleHID *)purple client:(nullable SimDeviceLegacyClient *)client simulator:(FBSimulator *)simulator mainScreenSize:(CGSize)mainScreenSize mainScreenScale:(float)mainScreenScale queue:(dispatch_queue_t)queue;
+- (BOOL)shouldUseCoreDeviceHID;
 
 @end
 
@@ -43,20 +44,35 @@ static const char *SimulatorHIDClientClassName = "SimulatorKit.SimDeviceLegacyHI
 
 + (FBFuture<FBSimulatorHID *> *)hidForSimulator:(FBSimulator *)simulator
 {
+  BOOL shouldUseCoreDeviceHID = FBCoreDeviceHID.shouldHandleCurrentXcode;
+
   Class clientClass = objc_lookUpClass(SimulatorHIDClientClassName);
-  NSParameterAssert(clientClass);
+  if (!clientClass && !shouldUseCoreDeviceHID) {
+    return (FBFuture *)[[FBSimulatorError
+                         describe:[NSString stringWithFormat:@"Could not find %@", @(SimulatorHIDClientClassName)]]
+                        failFuture];
+  }
+
   NSError *error = nil;
-  SimDeviceLegacyClient *client = [[clientClass alloc] initWithDevice:simulator.device error:&error];
-  if (!client) {
+  SimDeviceLegacyClient *client = clientClass ? [[clientClass alloc] initWithDevice:simulator.device error:&error] : nil;
+  if (!client && !shouldUseCoreDeviceHID) {
     return (FBFuture *)[[[FBSimulatorError
                           describe:[NSString stringWithFormat:@"Could not create instance of %@", NSStringFromClass(clientClass)]]
                          causedBy:error]
                         failFuture];
   }
-  FBSimulatorIndigoHID *indigo = [FBSimulatorIndigoHID simulatorKitHIDWithError:&error];
-  if (!indigo) {
-    return nil;
+  if (!client) {
+    error = nil;
   }
+
+  FBSimulatorIndigoHID *indigo = nil;
+  if (!shouldUseCoreDeviceHID) {
+    indigo = [FBSimulatorIndigoHID simulatorKitHIDWithError:&error];
+    if (!indigo) {
+      return nil;
+    }
+  }
+
   CGSize mainScreenSize = simulator.device.deviceType.mainScreenSize;
   float scale = simulator.device.deviceType.mainScreenScale;
   FBSimulatorPurpleHID *purple = [FBSimulatorPurpleHID purple];
@@ -64,7 +80,7 @@ static const char *SimulatorHIDClientClassName = "SimulatorKit.SimDeviceLegacyHI
   return [FBFuture futureWithResult:hid];
 }
 
-- (instancetype)initWithIndigo:(FBSimulatorIndigoHID *)indigo purple:(FBSimulatorPurpleHID *)purple client:(SimDeviceLegacyClient *)client simulator:(FBSimulator *)simulator mainScreenSize:(CGSize)mainScreenSize mainScreenScale:(float)mainScreenScale queue:(dispatch_queue_t)queue
+- (instancetype)initWithIndigo:(nullable FBSimulatorIndigoHID *)indigo purple:(FBSimulatorPurpleHID *)purple client:(nullable SimDeviceLegacyClient *)client simulator:(FBSimulator *)simulator mainScreenSize:(CGSize)mainScreenSize mainScreenScale:(float)mainScreenScale queue:(dispatch_queue_t)queue
 {
   self = [super init];
   if (!self) {
@@ -86,6 +102,12 @@ static const char *SimulatorHIDClientClassName = "SimulatorKit.SimDeviceLegacyHI
 
 - (FBFuture<NSNull *> *)sendEvent:(NSData *)data
 {
+  if (!self.indigo || !self.client) {
+    return (FBFuture *)[[FBSimulatorError
+                         describe:@"Indigo HID is unavailable for this simulator connection; this HID event is not supported by the Xcode 27 CoreDevice helper transport"]
+                        failFuture];
+  }
+
   return [FBFuture onQueue:self.queue
                    resolve:^{
                      FBMutableFuture<NSNull *> *future = FBMutableFuture.future;
@@ -102,12 +124,50 @@ static const char *SimulatorHIDClientClassName = "SimulatorKit.SimDeviceLegacyHI
                    }];
 }
 
+- (FBFuture<NSNull *> *)sendTouchWithDirection:(FBSimulatorHIDDirection)direction x:(double)x y:(double)y
+{
+  if ([self shouldUseCoreDeviceHID]) {
+    FBSimulator *simulator = self.simulator;
+    if (!simulator) {
+      return (FBFuture *)[[FBSimulatorError describe:@"Cannot send CoreDevice touch, simulator reference is nil"] failFuture];
+    }
+    return [FBCoreDeviceHID
+      sendTouchWithUDID:simulator.udid
+      direction:direction
+      x:x
+      y:y
+      screenSize:self.mainScreenSize
+      screenScale:self.mainScreenScale
+    ];
+  }
+
+  return [self sendEvent:[self.indigo touchScreenSize:self.mainScreenSize screenScale:self.mainScreenScale direction:direction x:x y:y]];
+}
+
+- (FBFuture<NSNull *> *)sendKeyboardWithDirection:(FBSimulatorHIDDirection)direction keyCode:(unsigned int)keyCode
+{
+  if ([self shouldUseCoreDeviceHID]) {
+    FBSimulator *simulator = self.simulator;
+    if (!simulator) {
+      return (FBFuture *)[[FBSimulatorError describe:@"Cannot send CoreDevice keyboard event, simulator reference is nil"] failFuture];
+    }
+    return [FBCoreDeviceHID sendKeyboardWithUDID:simulator.udid direction:direction keyCode:keyCode];
+  }
+
+  return [self sendEvent:[self.indigo keyboardWithDirection:direction keyCode:keyCode]];
+}
+
 - (void)sendIndigoMessageData:(NSData *)data completionQueue:(dispatch_queue_t)completionQueue completion:(void (^)(NSError *))completion
 {
+  if (!self.client) {
+    completion([FBSimulatorError describe:@"Cannot send Indigo HID message because SimDeviceLegacyHIDClient is unavailable"].build);
+    return;
+  }
+
   // Host-side "Indigo" injection: hand the IndigoMessage to SimulatorKit's
   // SimDeviceLegacyHIDClient, which writes it to the guest's SimDeviceIO port for
   // backboardd to consume. See FBSimulatorHID.h for the full host→guest chain and the
-  // parallel (currently entitlement-gated, unreachable) CoreDevice/dtuhidd path.
+  // parallel CoreDevice/dtuhidd helper path used by semantic touch/key events on Xcode 27+.
   //
   // The event is delivered asynchronously.
   // Therefore copy the message and let the client manage the lifecycle of it.
@@ -183,6 +243,9 @@ static const mach_msg_timeout_t DefaultPurpleSendTimeoutMs = 2000;
 
 - (NSString *)description
 {
+  if ([self shouldUseCoreDeviceHID]) {
+    return [NSString stringWithFormat:@"CoreDevice helper/SimulatorKit HID %@", self.client ?: @"(legacy unavailable)"];
+  }
   return [NSString stringWithFormat:@"SimulatorKit HID %@", self.client];
 }
 
@@ -190,7 +253,7 @@ static const mach_msg_timeout_t DefaultPurpleSendTimeoutMs = 2000;
 
 - (FBFuture<NSNull *> *)connect
 {
-  if (!self.client) {
+  if (!self.client && ![self shouldUseCoreDeviceHID]) {
     return (FBFuture *)[[FBSimulatorError
                          describe:@"Cannot Connect, HID client has already been disposed of"]
                         failFuture];
@@ -200,8 +263,17 @@ static const mach_msg_timeout_t DefaultPurpleSendTimeoutMs = 2000;
 
 - (FBFuture<NSNull *> *)disconnect
 {
+  FBSimulator *simulator = self.simulator;
+  if (simulator) {
+    [FBCoreDeviceHID clearStateForUDID:simulator.udid];
+  }
   _client = nil;
   return FBFuture.empty;
+}
+
+- (BOOL)shouldUseCoreDeviceHID
+{
+  return [FBCoreDeviceHID shouldHandleCurrentXcode];
 }
 
 @end

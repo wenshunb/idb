@@ -18,8 +18,10 @@
 /**
  The HID abstraction layer for a Simulator, providing two transport paths:
 
- 1. Indigo (IndigoHIDRegistrationPort) — for touch, button, and keyboard events.
-    Payloads are constructed by FBSimulatorIndigoHID and sent via SimDeviceLegacyHIDClient.
+ 1. Indigo (IndigoHIDRegistrationPort) — for older-Xcode touch/keyboard events
+    and HID events that are not yet covered by the CoreDevice helper transport.
+    Payloads are constructed by FBSimulatorIndigoHID and sent via SimDeviceLegacyHIDClient
+    when that legacy client is present.
     Guest-side: SimHIDVirtualServiceManager dispatches on eventKind + target.
 
  2. PurpleWorkspacePort — for GSEvent-based events (e.g., device orientation changes).
@@ -34,7 +36,7 @@
  implemented by CoreSimulator and both bottom out in the guest's HID system (backboardd);
  they differ only in how the event crosses the host/guest boundary:
 
- 1. Legacy "Indigo" path — what this class uses.
+ 1. Legacy "Indigo" path — used for older Xcodes and non-v1 HID events.
       FBSimulatorIndigoHID builds an `IndigoMessage`
         → -[SimDeviceLegacyHIDClient sendWithMessage:freeWhenDone:completionQueue:completion:]  (SimulatorKit, host-side)
         → SimDeviceIO Indigo port  (CoreSimulator host↔guest IO channel)
@@ -42,27 +44,24 @@
     Host-side, ObjC/C-callable, requires no entitlement. This is the reachable, stable
     path that FBSimulatorControl uses today.
 
- 2. Modern "CoreDevice" path — Xcode 27+, NOT used here (unreachable by third parties).
-      CoreDevice.HIDDigitizer.send(pointOne:pointTwo:eventType:edge:target:)  (private Swift)
-        → `IndigoDigitizerEvent`  (CoreDeviceUtilities)
-        → guest Mach endpoint `com.apple.coredevice.feature.remote.hid.digitizer`
-        → dtuhidd  (CoreSimulator daemon in launchd_sim; class dtuhidd.IndigoHIDServer;
-                    binary at CoreSimulator.framework/Resources/Platforms/iphoneos/usr/libexec/dtuhidd)
-        → HIDEventSystemClient posts an `IOHIDEvent` to com.apple.iohideventsystem
+ 2. CoreDevice/UniversalHID helper path — Xcode 27+ touch/keyboard transport.
+      FBSimulatorControl launches the bundled/private helper
+        → CoreDevice.DeviceManager finds the simulator
+        → com.apple.coredevice.feature.remote.universalhidservice
+        → UniversalHID service 0x101 (touchscreen) or 0x200 (keyboard)
+        → dtuhidd posts IOHID reports to com.apple.iohideventsystem
         → guest backboardd → UIKit touch
-    This is what Xcode's coding agent and DeviceHub drive. It is not callable from a
-    third party today: the CoreDevice Swift API is generic/async with no shipped module
-    interface and no client-constructible `RemoteDevice`, and the HID feature is gated by
-    the `com.apple.private.CoreDevice.hid` entitlement held by CoreDeviceService.xpc.
+    This is what Xcode's DeviceHub-era simulator stack drives. In this fork,
+    FBSimulatorControl keeps the semantic API but does not import or link CoreDevice
+    directly. The helper is built separately with the Xcode 27 toolchain so the main
+    frameworks can keep the macOS 11 deployment target.
 
- Both paths speak the same Indigo digitizer model (start/position/end edge transitions
- with per-contact points) and both bottom out in CoreSimulator — notably, `dtuhidd` is
- itself a CoreSimulator binary, so the "CoreDevice" digitizer for a simulator is still
- CoreSimulator functionality behind an entitled front door. The CoreDevice path is the
- direction Apple is converging on, and is the only host-driven touch path for physical
- devices (where SimDeviceIO does not exist). The intent for this layer is to expose both
- as alternative transports: the legacy Indigo path for simulators today, and a
- CoreDevice-aligned path once Apple ships a supported (non-entitled) interface.
+ Both paths represent the same semantic touch/keyboard actions and bottom out in
+ CoreSimulator — notably, `dtuhidd` is itself a CoreSimulator binary, so the
+ "CoreDevice" digitizer for a simulator is still CoreSimulator functionality.
+ The CoreDevice path is the direction Apple is converging on. The intent for this
+ layer is to expose both as alternative transports while preserving the public HID
+ event API and keeping non-v1 HID behavior on Indigo/Purple.
  */
 @interface FBSimulatorHID : NSObject
 
@@ -105,6 +104,25 @@
  @return A future that resolves when the event has been sent.
  */
 - (nonnull FBFuture<NSNull *> *)sendEvent:(nonnull NSData *)data;
+
+/**
+ Sends a semantic single-touch event.
+
+ @param direction the touch direction.
+ @param x the x coordinate in IDB simulator coordinates.
+ @param y the y coordinate in IDB simulator coordinates.
+ @return A future that resolves when the event has been sent.
+ */
+- (nonnull FBFuture<NSNull *> *)sendTouchWithDirection:(FBSimulatorHIDDirection)direction x:(double)x y:(double)y NS_SWIFT_NAME(sendTouch(direction:x:y:));
+
+/**
+ Sends a semantic keyboard event.
+
+ @param direction the key direction.
+ @param keyCode the USB HID keyboard usage code.
+ @return A future that resolves when the event has been sent.
+ */
+- (nonnull FBFuture<NSNull *> *)sendKeyboardWithDirection:(FBSimulatorHIDDirection)direction keyCode:(unsigned int)keyCode NS_SWIFT_NAME(sendKeyboard(direction:keyCode:));
 
 /**
  Sends the event payload, synchronously.
@@ -179,9 +197,10 @@
 @property (nonnull, nonatomic, readonly, strong) dispatch_queue_t queue;
 
 /**
- The Indigo payload builder (touch, button, keyboard).
+ The Indigo payload builder (touch, button, keyboard), if SimulatorApp exposes it.
+ This may be nil on Xcode 27+ CoreDevice-only HID connections.
  */
-@property (nonnull, nonatomic, readonly, strong) FBSimulatorIndigoHID *indigo;
+@property (nullable, nonatomic, readonly, strong) FBSimulatorIndigoHID *indigo;
 
 /**
  The Purple/GSEvent payload builder (orientation, shake).

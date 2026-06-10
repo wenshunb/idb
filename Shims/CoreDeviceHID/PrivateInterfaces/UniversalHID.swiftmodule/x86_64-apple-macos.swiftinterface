@@ -1,0 +1,225 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.4
+// swift-module-flags: -target x86_64-apple-macosx27.0 -enable-library-evolution -module-name UniversalHID
+import Foundation
+import Swift
+
+@frozen public struct HIDUsage: Swift.Hashable, Swift.CustomStringConvertible {
+  @_hasStorage public var _page: Swift.UInt16 {
+    get
+  }
+  @_hasStorage public var _usage: Swift.UInt16 {
+    get
+  }
+  public init(page: Swift.Int, usage: Swift.Int)
+  public var page: Swift.Int { get }
+  public var usage: Swift.Int { get }
+  public var description: Swift.String { get }
+}
+
+@frozen public struct ReportID {
+  @_hasStorage public var rawValue: Swift.UInt8 {
+    get
+    set
+  }
+  public init(_ rawValue: Swift.UInt8)
+  public init(rawValue: Swift.UInt8)
+}
+
+@frozen public struct HIDReport: Swift.Hashable, Swift.CustomStringConvertible, Swift.CustomDebugStringConvertible {
+  @_hasStorage public var storage: Foundation.Data {
+    get
+    set
+  }
+  public init(data: Foundation.Data)
+  public init(bitCount: Swift.Int, id: UniversalHID.ReportID)
+  public init<S>(_ elements: S) where S: Swift.Sequence, S.Element == Swift.UInt8
+  public var data: Foundation.Data { get }
+  public var reportID: UniversalHID.ReportID { get set }
+  public var count: Swift.Int { get }
+  public var description: Swift.String { get }
+  public var debugDescription: Swift.String { get }
+}
+
+@frozen public struct HIDPoint: Swift.Hashable, Swift.CustomStringConvertible {
+  @_hasStorage public var x: Swift.Double {
+    get
+    set
+  }
+  @_hasStorage public var y: Swift.Double {
+    get
+    set
+  }
+  @_hasStorage public var z: Swift.Double {
+    get
+    set
+  }
+  public init()
+  public init(x: Swift.Double, y: Swift.Double, z: Swift.Double)
+  public var description: Swift.String { get }
+}
+
+@frozen public struct HIDTime: Swift.Hashable, Swift.CustomStringConvertible {
+  @_hasStorage public var rawValue: Swift.UInt64 {
+    get
+  }
+  public init(rawValue: Swift.UInt64)
+  public init(nanoseconds: Swift.UInt64)
+  public init(nanoseconds: Swift.Double)
+  public init(seconds: Swift.Double)
+  public var nanoseconds: Swift.UInt64 { get }
+  public var seconds: Swift.Double { get }
+  public var description: Swift.String { get }
+}
+
+@frozen public struct HIDEventPhase: Swift.OptionSet, Swift.CaseIterable, Swift.CustomStringConvertible {
+  @_hasStorage public var rawValue: Swift.UInt8 {
+    get
+    set
+  }
+  public init(rawValue: Swift.UInt8)
+  public init(rawValue: Swift.Int)
+  public init(_ rawValue: Swift.UInt16)
+  public static var mayBegin: UniversalHID.HIDEventPhase { get }
+  public static var began: UniversalHID.HIDEventPhase { get }
+  public static var changed: UniversalHID.HIDEventPhase { get }
+  public static var ended: UniversalHID.HIDEventPhase { get }
+  public static var canceled: UniversalHID.HIDEventPhase { get }
+  public static var allCases: [UniversalHID.HIDEventPhase] { get }
+  public var description: Swift.String { get }
+}
+
+@frozen public struct HIDEventFlags: Swift.CustomStringConvertible {
+  @_hasStorage public var rawValue: Swift.UInt32 {
+    get
+    set
+  }
+  public init(rawValue: Swift.Int)
+  public init(rawValue: Swift.UInt32)
+  public init(phase: UniversalHID.HIDEventPhase)
+  public var phase: UniversalHID.HIDEventPhase { get set }
+  public var description: Swift.String { get }
+}
+
+@frozen public struct DigitizerEventMask: Swift.CustomStringConvertible {
+  @_hasStorage public var rawValue: Swift.UInt32 {
+    get
+    set
+  }
+  public init(rawValue: Swift.Int)
+  public init(rawValue: Swift.UInt32)
+  public var description: Swift.String { get }
+}
+
+@frozen public struct DigitizerType: Swift.CustomStringConvertible {
+  @_hasStorage public var rawValue: Swift.UInt32 {
+    get
+    set
+  }
+  public init(rawValue: Swift.Int)
+  public init(rawValue: Swift.UInt32)
+  public var description: Swift.String { get }
+}
+
+@frozen public struct DigitizerContact {
+  @_hasStorage public var report: UniversalHID.HIDReport {
+    get
+    set
+  }
+  public init()
+  public init(data: Foundation.Data)
+  public var index: Swift.Int { get set }
+  public var point: UniversalHID.HIDPoint { get set }
+  public var x: Swift.Double { get set }
+  public var y: Swift.Double { get set }
+  public var range: Swift.Bool { get set }
+  public var touch: Swift.Bool { get set }
+  public var resting: Swift.Bool { get set }
+}
+
+@frozen public struct DigitizerReport {
+  @_hasStorage public var report: UniversalHID.HIDReport {
+    get
+    set
+  }
+  public init(_report: UniversalHID.HIDReport)
+  public static var reportID: UniversalHID.ReportID { get }
+  public static var initialReportBitCount: Swift.Int { get }
+  public var contactCount: Swift.UInt8 { get set }
+  public var contactCountMaximum: Swift.UInt8 { get set }
+  public var remoteTimestamp: Swift.UInt64? { get set }
+  public var contacts: [UniversalHID.DigitizerContact] { get }
+  public func contact(atIndex: Swift.Int) -> UniversalHID.DigitizerContact
+  public mutating func setContact(_ contact: UniversalHID.DigitizerContact, atIndex: Swift.Int)
+  public mutating func setContactIdentity(_ identity: Swift.UInt8, atIndex: Swift.Int)
+}
+
+@frozen public struct KeyboardUsage: Swift.Hashable {
+  @_hasStorage public var rawValue: Swift.UInt8 {
+    get
+  }
+  public init?(rawValue: Swift.UInt8)
+  public var isModifier: Swift.Bool { get }
+  public static var delete: UniversalHID.KeyboardUsage { get }
+  public static var escape: UniversalHID.KeyboardUsage { get }
+  public static var leftShift: UniversalHID.KeyboardUsage { get }
+  public static var rightShift: UniversalHID.KeyboardUsage { get }
+  public static var leftControl: UniversalHID.KeyboardUsage { get }
+  public static var rightControl: UniversalHID.KeyboardUsage { get }
+  public static var leftOption: UniversalHID.KeyboardUsage { get }
+  public static var rightOption: UniversalHID.KeyboardUsage { get }
+  public static var leftCommand: UniversalHID.KeyboardUsage { get }
+  public static var rightCommand: UniversalHID.KeyboardUsage { get }
+}
+
+@frozen public struct KeyboardFlags {
+  @_hasStorage public var rawValue: Swift.UInt8 {
+    get
+    set
+  }
+  public init(rawValue: Swift.UInt8)
+}
+
+@frozen public struct KeyboardReport: Swift.CustomStringConvertible {
+  @_hasStorage public var report: UniversalHID.HIDReport {
+    get
+    set
+  }
+  public init(_report: UniversalHID.HIDReport)
+  public init<S>(usages: S) where S: Swift.Sequence, S.Element == UniversalHID.KeyboardUsage
+  public static var reportID: UniversalHID.ReportID { get }
+  public static var initialReportBitCount: Swift.Int { get }
+  public var keyboardState: UniversalHID.KeyboardFlags { get set }
+  public var remoteTimestamp: Swift.UInt64? { get set }
+  public var description: Swift.String { get }
+}
+
+public enum HIDDeviceType: Swift.Hashable, Swift.CustomStringConvertible {
+  public init?(deviceTypeHint: Swift.String)
+  public var description: Swift.String { get }
+}
+
+@frozen public struct HIDServiceProperties: Swift.Hashable, Swift.CustomStringConvertible {
+  @_hasStorage public var storage: Foundation.NSMutableDictionary {
+    get
+  }
+  public init(usages: [UniversalHID.HIDUsage]) throws
+  public init(serviceID: Swift.UInt64, properties: [Swift.String : Any]) throws
+  public var serviceID: Swift.UInt64 { get set }
+  public var id: Swift.UInt64 { get }
+  public var primaryUsagePair: UniversalHID.HIDUsage { get set }
+  public var deviceUsagePairs: [UniversalHID.HIDUsage] { get set }
+  public var reportDescriptor: Foundation.Data? { get set }
+  public var surfaceDimensions: UniversalHID.HIDServiceProperties.HIDSurfaceDimensions? { get set }
+  public var product: Swift.String? { get set }
+  public var manufacturer: Swift.String? { get set }
+  public var deviceTypeHint: Swift.String? { get set }
+  public var dictionaryRepresentation: [Swift.String : Any] { get }
+  public var description: Swift.String { get }
+
+  public struct HIDSurfaceDimensions: Swift.Hashable {
+    public init(width: Swift.Double, height: Swift.Double)
+    public var width: Swift.Double { get set }
+    public var height: Swift.Double { get set }
+  }
+}

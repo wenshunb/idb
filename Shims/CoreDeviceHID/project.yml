@@ -1,0 +1,25 @@
+name: FBCoreDeviceHIDHelper
+
+options:
+  createIntermediateGroups: true
+
+targets:
+  idb_coredevice_hid_helper:
+    type: tool
+    platform: macOS
+    deploymentTarget: "12.0"
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_NAME: idb_coredevice_hid_helper
+        SWIFT_VERSION: 5.0
+        SDKROOT: macosx
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: YES
+        CODE_SIGN_IDENTITY: "-"
+        FRAMEWORK_SEARCH_PATHS: $(inherited) /Library/Developer/PrivateFrameworks /Library/Developer/PrivateFrameworks/CoreDevice.framework/Versions/A/Frameworks
+        OTHER_SWIFT_FLAGS: $(inherited) -I $(SRCROOT)/PrivateInterfaces
+        OTHER_LDFLAGS: $(inherited) -framework CoreDevice -framework CoreDeviceUtilities -framework UniversalHID
+    dependencies:
+      - sdk: Foundation.framework
